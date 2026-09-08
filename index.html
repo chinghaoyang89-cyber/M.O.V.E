@@ -2202,6 +2202,7 @@ function startLevel1(){
         level1SpawnTimer
     );
 
+    // 修改：倒计时从 30 秒修改为 20 秒
     startTimer(20);
 
     spawnLevel1Object();
@@ -2273,7 +2274,8 @@ function spawnLevel1Object(){
             Math.random() - .5
         ) * W * .16;
 
-    const timeElapsed = Math.max(0, 30 - timeLeft);
+    // 修改：基准倒计时计算从 30 修改为 20
+    const timeElapsed = Math.max(0, 20 - timeLeft);
     const speedMultiplier = 1 + (timeElapsed * 0.035);
 
     objects.push({
@@ -3132,10 +3134,11 @@ function updateLevel1(){
                         .015
                     );
 
+                // 修复：加大下落幅度 (H*.85)，确保能顺利跌落出下方屏幕
                 o.y =
                     o.targetY +
                     (
-                        H*.60
+                        H*.85
                     ) *
                     o.fallProgress;
 
@@ -3210,11 +3213,12 @@ function updateLevel1(){
                 !o.hit
         );
 
+    // 修复：优化过滤逻辑，允许未下落完成的物体保留，超出底部的物体及时清理并刷新新对象
     objects =
         objects.filter(
             o => {
                 if(o.progress < 1) return true;
-                return o.y < H * .85;
+                return o.fallProgress < 1 && o.y < H * 1.05;
             }
         );
 }
