@@ -1,0 +1,4518 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M.O.V.E. 体育体感课堂</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<style>
+*{
+    box-sizing:border-box;
+    margin:0;
+    padding:0;
+}
+
+html,body{
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#05070c;
+    font-family:
+        Inter,
+        "Segoe UI",
+        "Microsoft YaHei",
+        sans-serif;
+    color:white;
+}
+
+body{
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+#app{
+    position:relative;
+    width:100vw;
+    height:100vh;
+    overflow:hidden;
+    background:
+        radial-gradient(circle at 50% 20%,rgba(0,245,255,.08),transparent 35%),
+        radial-gradient(circle at 20% 80%,rgba(183,255,0,.05),transparent 30%),
+        #05070c;
+}
+
+#webcam{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    transform:scaleX(-1);
+    opacity:.78;
+    filter:
+        saturate(.8)
+        contrast(1.05)
+        brightness(.72);
+}
+
+.camera-overlay{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    background:
+        linear-gradient(
+            rgba(0,0,0,.18),
+            transparent 30%,
+            rgba(0,0,0,.3)
+        );
+}
+
+#gameCanvas{
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    pointer-events:none;
+}
+
+.scanlines{
+    position:absolute;
+    inset:0;
+    pointer-events:none;
+    opacity:.08;
+    background:
+        repeating-linear-gradient(
+            0deg,
+            transparent 0px,
+            transparent 3px,
+            rgba(255,255,255,.15) 4px
+        );
+}
+
+#hud{
+    position:absolute;
+    top:22px;
+    left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    align-items:center;
+    gap:14px;
+    z-index:20;
+}
+
+.hud-card{
+    min-width:130px;
+    padding:10px 17px;
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:15px;
+    background:rgba(8,12,20,.72);
+    backdrop-filter:blur(18px);
+    box-shadow:
+        0 10px 35px rgba(0,0,0,.35),
+        inset 0 0 25px rgba(255,255,255,.025);
+}
+
+.hud-label{
+    font-size:9px;
+    letter-spacing:2px;
+    color:rgba(255,255,255,.45);
+    margin-bottom:3px;
+}
+
+.hud-value{
+    font-size:21px;
+    font-weight:800;
+    letter-spacing:1px;
+}
+
+#stageValue{
+    color:#00f5ff;
+}
+
+#scoreValue{
+    color:#b7ff00;
+}
+
+#timeValue{
+    color:#fff;
+}
+
+#comboValue{
+    color:#ff3cac;
+}
+
+.screen{
+    position:absolute;
+    inset:0;
+    z-index:50;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    background:
+        radial-gradient(
+            circle at center,
+            rgba(0,245,255,.09),
+            transparent 40%
+        ),
+        rgba(2,4,8,.84);
+    backdrop-filter:blur(10px);
+}
+
+.start-box{
+    width:min(720px,90vw);
+    text-align:center;
+}
+
+.logo-small{
+    font-size:11px;
+    letter-spacing:6px;
+    color:#00f5ff;
+    font-weight:800;
+    margin-bottom:14px;
+}
+
+.logo{
+    font-size:clamp(52px,9vw,105px);
+    line-height:.9;
+    font-weight:950;
+    letter-spacing:-5px;
+    background:
+        linear-gradient(
+            90deg,
+            #00f5ff,
+            #ffffff 45%,
+            #b7ff00
+        );
+    -webkit-background-clip:text;
+    color:transparent;
+    filter:drop-shadow(0 0 30px rgba(0,245,255,.22));
+}
+
+.subtitle{
+    margin-top:18px;
+    font-size:15px;
+    letter-spacing:5px;
+    color:rgba(255,255,255,.55);
+}
+
+.start-btn{
+    margin-top:45px;
+    padding:17px 55px;
+    border:1px solid rgba(0,245,255,.5);
+    border-radius:100px;
+    background:
+        linear-gradient(
+            100deg,
+            rgba(0,245,255,.16),
+            rgba(183,255,0,.12)
+        );
+    color:white;
+    font-size:16px;
+    font-weight:800;
+    letter-spacing:3px;
+    cursor:pointer;
+    transition:.25s;
+    box-shadow:
+        0 0 35px rgba(0,245,255,.12);
+}
+
+.start-btn:hover{
+    transform:translateY(-3px) scale(1.03);
+    box-shadow:
+        0 0 45px rgba(0,245,255,.28);
+}
+
+#calibration{
+    display:none;
+    z-index:60;
+}
+
+.calibration-panel{
+    position:relative;
+    width:min(650px,92vw);
+    height:min(760px,90vh);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+}
+
+.calibration-title{
+    position:absolute;
+    top:5%;
+    font-size:12px;
+    letter-spacing:5px;
+    color:#00f5ff;
+    font-weight:800;
+}
+
+.calibration-subtitle{
+    position:absolute;
+    top:10%;
+    color:rgba(255,255,255,.58);
+    font-size:13px;
+}
+
+.body-guide{
+    position:absolute;
+    width:min(310px,50vw);
+    height:68%;
+    max-height:540px;
+    opacity:.7;
+    transition:.25s;
+}
+
+.body-guide path,
+.body-guide circle,
+.body-guide ellipse{
+    fill:none;
+    stroke:#ff3b5f;
+    stroke-width:3;
+    vector-effect:non-scaling-stroke;
+    filter:
+        drop-shadow(0 0 7px rgba(255,59,95,.7));
+    transition:.25s;
+}
+
+.body-guide.good path,
+.body-guide.good circle,
+.body-guide.good ellipse{
+    stroke:#b7ff00;
+    filter:
+        drop-shadow(0 0 8px rgba(183,255,0,.85))
+        drop-shadow(0 0 22px rgba(183,255,0,.45));
+}
+
+.body-guide.detected path,
+.body-guide.detected circle,
+.body-guide.detected ellipse{
+    stroke:#00f5ff;
+    filter:
+        drop-shadow(0 0 8px rgba(0,245,255,.9))
+        drop-shadow(0 0 20px rgba(0,245,255,.5));
+}
+
+.scan-frame{
+    position:absolute;
+    width:min(360px,58vw);
+    height:68%;
+    max-height:560px;
+    border:1px solid rgba(0,245,255,.14);
+    border-radius:180px 180px 70px 70px;
+    box-shadow:
+        inset 0 0 40px rgba(0,245,255,.03);
+}
+
+.scan-frame::before,
+.scan-frame::after{
+    content:"";
+    position:absolute;
+    left:8%;
+    right:8%;
+    height:1px;
+    background:linear-gradient(
+        90deg,
+        transparent,
+        #00f5ff,
+        transparent
+    );
+    box-shadow:0 0 12px #00f5ff;
+}
+
+.scan-frame::before{
+    top:20%;
+    animation:scan 2.5s infinite;
+}
+
+@keyframes scan{
+    0%{top:15%;opacity:0}
+    15%{opacity:1}
+    85%{opacity:1}
+    100%{top:85%;opacity:0}
+}
+
+.calibration-status{
+    position:absolute;
+    bottom:13%;
+    min-width:300px;
+    text-align:center;
+}
+
+.status-main{
+    font-size:24px;
+    font-weight:900;
+    letter-spacing:2px;
+    transition:.25s;
+}
+
+.status-detail{
+    margin-top:9px;
+    font-size:12px;
+    color:rgba(255,255,255,.5);
+}
+
+.calibration-progress{
+    width:min(350px,70vw);
+    height:5px;
+    margin:20px auto 0;
+    border-radius:10px;
+    background:rgba(255,255,255,.08);
+    overflow:hidden;
+}
+
+#calibrationProgress{
+    width:0%;
+    height:100%;
+    background:#b7ff00;
+    box-shadow:0 0 15px rgba(183,255,0,.8);
+    transition:.1s;
+}
+
+.corner{
+    position:absolute;
+    width:30px;
+    height:30px;
+    border-color:#00f5ff;
+    border-style:solid;
+}
+
+.corner.tl{
+    left:0;
+    top:0;
+    border-width:2px 0 0 2px;
+}
+
+.corner.tr{
+    right:0;
+    top:0;
+    border-width:2px 2px 0 0;
+}
+
+.corner.bl{
+    left:0;
+    bottom:0;
+    border-width:0 0 2px 2px;
+}
+
+.corner.br{
+    right:0;
+    bottom:0;
+    border-width:0 2px 2px 0;
+}
+
+#countdown{
+    display:none;
+    z-index:70;
+    background:rgba(2,4,8,.25);
+}
+
+.count-number{
+    font-size:clamp(100px,22vw,250px);
+    font-weight:1000;
+    letter-spacing:-15px;
+    color:white;
+    text-shadow:
+        0 0 25px rgba(0,245,255,.7),
+        0 0 80px rgba(0,245,255,.3);
+    animation:countPop .8s ease;
+}
+
+.count-label{
+    position:absolute;
+    margin-top:280px;
+    font-size:12px;
+    letter-spacing:7px;
+    color:rgba(255,255,255,.6);
+}
+
+@keyframes countPop{
+    0%{
+        transform:scale(1.5);
+        opacity:0;
+    }
+    40%{
+        transform:scale(1);
+        opacity:1;
+    }
+    100%{
+        transform:scale(.95);
+    }
+}
+
+#toast{
+    position:absolute;
+    top:115px;
+    left:50%;
+    transform:translateX(-50%) translateY(-15px);
+    z-index:40;
+    opacity:0;
+    padding:11px 22px;
+    border:1px solid rgba(255,255,255,.15);
+    border-radius:100px;
+    background:rgba(8,12,20,.82);
+    backdrop-filter:blur(14px);
+    font-size:12px;
+    font-weight:800;
+    letter-spacing:2px;
+    transition:.25s;
+}
+
+#toast.show{
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+}
+
+#gameover{
+    display:none;
+}
+
+.gameover-box{
+    text-align:center;
+}
+
+.gameover-title{
+    font-size:12px;
+    letter-spacing:7px;
+    color:#ff3cac;
+    font-weight:800;
+}
+
+.final-score{
+    margin-top:10px;
+    font-size:clamp(70px,13vw,150px);
+    font-weight:1000;
+    color:#b7ff00;
+    text-shadow:
+        0 0 30px rgba(183,255,0,.35);
+}
+
+.final-label{
+    font-size:11px;
+    letter-spacing:5px;
+    color:rgba(255,255,255,.45);
+}
+
+.restart-btn{
+    margin-top:35px;
+    padding:14px 40px;
+    border-radius:100px;
+    border:1px solid rgba(255,255,255,.2);
+    background:rgba(255,255,255,.06);
+    color:white;
+    cursor:pointer;
+    font-weight:800;
+}
+
+#poseDebug{
+    position:absolute;
+    bottom:20px;
+    left:20px;
+    z-index:100;
+    font-size:10px;
+    color:rgba(255,255,255,.3);
+    display:none;
+}
+</style>
+</head>
+
+<body>
+
+<div id="app">
+
+<video id="webcam" autoplay playsinline muted></video>
+
+<div class="camera-overlay"></div>
+
+<canvas id="gameCanvas"></canvas>
+
+<div class="scanlines"></div>
+
+<div id="hud">
+
+    <div class="hud-card">
+        <div class="hud-label">STAGE</div>
+        <div class="hud-value" id="stageValue">READY</div>
+    </div>
+
+    <div class="hud-card">
+        <div class="hud-label">TIME</div>
+        <div class="hud-value" id="timeValue">--</div>
+    </div>
+
+    <div class="hud-card">
+        <div class="hud-label">SCORE</div>
+        <div class="hud-value" id="scoreValue">000</div>
+    </div>
+
+    <div class="hud-card">
+        <div class="hud-label">COMBO</div>
+        <div class="hud-value" id="comboValue">x0</div>
+    </div>
+
+</div>
+
+<div id="startScreen" class="screen">
+
+    <div class="start-box">
+
+        <div class="logo-small">
+            MOTION • OBSERVE • VERIFY • ENGAGE
+        </div>
+
+        <div class="logo">
+            M.O.V.E.
+        </div>
+
+        <div class="subtitle">
+            体育体感互动课堂
+        </div>
+
+        <button id="startBtn" class="start-btn">
+            START TRAINING
+        </button>
+
+    </div>
+
+</div>
+
+<div id="calibration" class="screen">
+
+    <div class="calibration-panel">
+
+        <div class="calibration-title">
+            BODY POSITION CALIBRATION
+        </div>
+
+        <div class="calibration-subtitle">
+            请站在摄像头前，让身体完整进入轮廓
+        </div>
+
+        <div class="scan-frame">
+
+            <div class="corner tl"></div>
+            <div class="corner tr"></div>
+            <div class="corner bl"></div>
+            <div class="corner br"></div>
+
+        </div>
+
+        <svg
+            id="bodyGuide"
+            class="body-guide"
+            viewBox="0 0 300 560"
+            preserveAspectRatio="xMidYMid meet"
+        >
+
+            <circle cx="150" cy="70" r="38"/>
+
+            <path d="M135 105 L135 125 L165 125 L165 105"/>
+
+            <path d="
+                M135 120
+                C110 125 92 145 85 180
+                L75 285
+                C73 305 88 318 105 315
+                L120 310
+                L120 420
+                L180 420
+                L180 310
+                L195 315
+                C212 318 227 305 225 285
+                L215 180
+                C208 145 190 125 165 120
+            "/>
+
+            <path d="
+                M105 145
+                L70 175
+                L45 255
+                L30 340
+            "/>
+
+            <path d="
+                M195 145
+                L230 175
+                L255 255
+                L270 340
+            "/>
+
+            <path d="
+                M120 415
+                L105 485
+                L95 550
+            "/>
+
+            <path d="
+                M180 415
+                L195 485
+                L205 550
+            "/>
+
+            <ellipse cx="88" cy="550" rx="30" ry="8"/>
+            <ellipse cx="212" cy="550" rx="30" ry="8"/>
+
+        </svg>
+
+        <div class="calibration-status">
+
+            <div
+                id="calibrationMain"
+                class="status-main"
+            >
+                WAITING FOR PLAYER
+            </div>
+
+            <div
+                id="calibrationDetail"
+                class="status-detail"
+            >
+                正在寻找人体
+            </div>
+
+            <div class="calibration-progress">
+                <div id="calibrationProgress"></div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div id="countdown" class="screen">
+
+    <div id="countNumber" class="count-number">
+        3
+    </div>
+
+    <div class="count-label">
+        GET READY
+    </div>
+
+</div>
+
+<div id="toast"></div>
+
+<div id="gameover" class="screen">
+
+    <div class="gameover-box">
+
+        <div class="gameover-title">
+            TRAINING COMPLETE
+        </div>
+
+        <div
+            id="finalScore"
+            class="final-score"
+        >
+            000
+        </div>
+
+        <div class="final-label">
+            FINAL SCORE
+        </div>
+
+        <button
+            id="restartBtn"
+            class="restart-btn"
+        >
+            PLAY AGAIN
+        </button>
+
+    </div>
+
+</div>
+
+<div id="poseDebug"></div>
+
+</div>
+
+<script>
+
+/* =========================================================
+   DOM
+========================================================= */
+
+const video =
+    document.getElementById("webcam");
+
+const canvas =
+    document.getElementById("gameCanvas");
+
+const ctx =
+    canvas.getContext("2d");
+
+const startScreen =
+    document.getElementById("startScreen");
+
+const calibration =
+    document.getElementById("calibration");
+
+const countdown =
+    document.getElementById("countdown");
+
+const gameover =
+    document.getElementById("gameover");
+
+const bodyGuide =
+    document.getElementById("bodyGuide");
+
+const calibrationMain =
+    document.getElementById("calibrationMain");
+
+const calibrationDetail =
+    document.getElementById("calibrationDetail");
+
+const calibrationProgress =
+    document.getElementById("calibrationProgress");
+
+const countNumber =
+    document.getElementById("countNumber");
+
+const toast =
+    document.getElementById("toast");
+
+const stageValue =
+    document.getElementById("stageValue");
+
+const timeValue =
+    document.getElementById("timeValue");
+
+const scoreValue =
+    document.getElementById("scoreValue");
+
+const comboValue =
+    document.getElementById("comboValue");
+
+const finalScore =
+    document.getElementById("finalScore");
+
+
+/* =========================================================
+   CANVAS
+========================================================= */
+
+let W = 1280;
+let H = 720;
+
+function resizeCanvas(){
+
+    W =
+        canvas.width =
+        window.innerWidth *
+        devicePixelRatio;
+
+    H =
+        canvas.height =
+        window.innerHeight *
+        devicePixelRatio;
+
+    canvas.style.width =
+        window.innerWidth + "px";
+
+    canvas.style.height =
+        window.innerHeight + "px";
+
+    ctx.setTransform(
+        devicePixelRatio,
+        0,
+        0,
+        devicePixelRatio,
+        0,
+        0
+    );
+
+    W = window.innerWidth;
+    H = window.innerHeight;
+}
+
+window.addEventListener(
+    "resize",
+    resizeCanvas
+);
+
+resizeCanvas();
+
+
+/* =========================================================
+   GAME STATE
+========================================================= */
+
+const START = "START";
+const CALIBRATION = "CALIBRATION";
+const COUNTDOWN = "COUNTDOWN";
+const LEVEL1 = "LEVEL1";
+const LEVEL2 = "LEVEL2";
+const TRANSITION = "TRANSITION";
+const GAMEOVER = "GAMEOVER";
+
+let state = START;
+
+let currentLevel = 0;
+
+let score = 0;
+let combo = 0;
+
+let timeLeft = 0;
+
+let gameTimer = null;
+
+let poseLandmarks = null;
+
+let cameraStarted = false;
+
+
+/* =========================================================
+   LANDMARKS
+========================================================= */
+
+const NOSE = 0;
+
+const LEFT_SHOULDER = 11;
+const RIGHT_SHOULDER = 12;
+
+const LEFT_ELBOW = 13;
+const RIGHT_ELBOW = 14;
+
+const LEFT_WRIST = 15;
+const RIGHT_WRIST = 16;
+
+const LEFT_HIP = 23;
+const RIGHT_HIP = 24;
+
+const LEFT_KNEE = 25;
+const RIGHT_KNEE = 26;
+
+const LEFT_ANKLE = 27;
+const RIGHT_ANKLE = 28;
+
+
+/* =========================================================
+   UTILITY
+========================================================= */
+
+function clamp(v,min,max){
+    return Math.max(
+        min,
+        Math.min(max,v)
+    );
+}
+
+function px(x){
+    return x * W;
+}
+
+function py(y){
+    return y * H;
+}
+
+function distance(a,b){
+
+    return Math.sqrt(
+        Math.pow(a.x-b.x,2) +
+        Math.pow(a.y-b.y,2)
+    );
+}
+
+function showToast(text){
+
+    toast.textContent = text;
+
+    toast.classList.add("show");
+
+    clearTimeout(showToast.timer);
+
+    showToast.timer =
+        setTimeout(()=>{
+            toast.classList.remove("show");
+        },1000);
+}
+
+
+/* =========================================================
+   AUDIO
+========================================================= */
+
+let audioCtx = null;
+
+function initAudio(){
+
+    if(!audioCtx){
+
+        audioCtx =
+            new (
+                window.AudioContext ||
+                window.webkitAudioContext
+            )();
+    }
+
+    if(audioCtx.state === "suspended"){
+        audioCtx.resume();
+    }
+}
+
+function beep(
+    frequency,
+    duration,
+    type="sine",
+    volume=.07
+){
+    try {
+        if(!audioCtx) return;
+        if(audioCtx.state === "suspended"){
+            audioCtx.resume();
+        }
+
+        const osc =
+            audioCtx.createOscillator();
+
+        const gain =
+            audioCtx.createGain();
+
+        osc.type = type;
+
+        osc.frequency.value =
+            frequency;
+
+        const now = audioCtx.currentTime;
+        const safeVolume = Math.max(0.001, volume);
+
+        gain.gain.setValueAtTime(
+            safeVolume,
+            now
+        );
+
+        gain.gain.exponentialRampToValueAtTime(
+            .001,
+            now + duration
+        );
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start(now);
+
+        osc.stop(
+            now + duration
+        );
+    } catch(e) {
+        console.warn("Audio error ignored:", e);
+    }
+}
+
+function countdownSound(){
+
+    beep(
+        500,
+        .12,
+        "square",
+        .05
+    );
+}
+
+function goSound(){
+
+    beep(
+        880,
+        .18,
+        "sine",
+        .08
+    );
+
+    setTimeout(()=>{
+        beep(
+            1320,
+            .2,
+            "sine",
+            .06
+        );
+    },100);
+}
+
+function throwSuccessSound(){
+
+    beep(
+        650,
+        .08,
+        "triangle",
+        .07
+    );
+
+    setTimeout(()=>{
+        beep(
+            1050,
+            .12,
+            "triangle",
+            .05
+        );
+    },60);
+}
+
+function catchSuccessSound(){
+
+    beep(
+        500,
+        .08,
+        "sine",
+        .07
+    );
+
+    setTimeout(()=>{
+        beep(
+            900,
+            .14,
+            "sine",
+            .06
+        );
+    },70);
+}
+
+function wrongSound(){
+
+    beep(
+        150,
+        .18,
+        "sawtooth",
+        .05
+    );
+}
+
+
+/* =========================================================
+   PARTICLES
+========================================================= */
+
+let particles = [];
+
+function burst(
+    x,
+    y,
+    color,
+    amount=18
+){
+
+    for(let i=0;i<amount;i++){
+
+        const angle =
+            Math.random() *
+            Math.PI *
+            2;
+
+        const speed =
+            2 + Math.random()*7;
+
+        particles.push({
+
+            x,
+            y,
+
+            vx:
+                Math.cos(angle) *
+                speed,
+
+            vy:
+                Math.sin(angle) *
+                speed,
+
+            life:1,
+
+            size:
+                2 +
+                Math.random()*5,
+
+            color
+        });
+    }
+}
+
+function updateParticles(){
+
+    for(
+        let i=particles.length-1;
+        i>=0;
+        i--
+    ){
+
+        const p =
+            particles[i];
+
+        p.x += p.vx;
+        p.y += p.vy;
+
+        p.vx *= .96;
+        p.vy *= .96;
+
+        p.vy += .08;
+
+        p.life -= .025;
+
+        if(p.life<=0){
+            particles.splice(i,1);
+        }
+    }
+}
+
+function drawParticles(){
+
+    for(const p of particles){
+
+        ctx.save();
+
+        ctx.globalAlpha =
+            p.life;
+
+        ctx.fillStyle =
+            p.color;
+
+        ctx.shadowBlur = 15;
+
+        ctx.shadowColor =
+            p.color;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            p.x,
+            p.y,
+            p.size,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
+
+/* =========================================================
+   BODY FEEDBACK
+========================================================= */
+
+let bodyFeedbacks = [];
+
+function addBodyFeedback(
+    x,
+    y,
+    type="throw"
+){
+
+    bodyFeedbacks.push({
+
+        x,
+        y,
+
+        type,
+
+        life:1,
+
+        radius:12,
+
+        rotation:
+            Math.random() *
+            Math.PI *
+            2
+    });
+}
+
+function updateBodyFeedbacks(){
+
+    for(
+        let i=bodyFeedbacks.length-1;
+        i>=0;
+        i--
+    ){
+
+        const f =
+            bodyFeedbacks[i];
+
+        f.life -= .035;
+
+        f.radius += 3;
+
+        f.rotation += .08;
+
+        if(f.life<=0){
+
+            bodyFeedbacks.splice(
+                i,
+                1
+            );
+        }
+    }
+}
+
+function drawBodyFeedbacks(){
+
+    for(
+        const f of bodyFeedbacks
+    ){
+
+        ctx.save();
+
+        ctx.globalAlpha =
+            f.life;
+
+        const feedbackColor =
+            f.type === "catch"
+                ? "#00f5ff"
+                : "#b7ff00";
+
+        ctx.beginPath();
+
+        ctx.arc(
+            f.x,
+            f.y,
+            f.radius,
+            0,
+            Math.PI*2
+        );
+
+        ctx.strokeStyle =
+            feedbackColor;
+
+        ctx.lineWidth = 4;
+
+        ctx.shadowBlur = 25;
+
+        ctx.shadowColor =
+            feedbackColor;
+
+        ctx.stroke();
+
+        ctx.beginPath();
+
+        ctx.arc(
+            f.x,
+            f.y,
+            f.radius*.45,
+            0,
+            Math.PI*2
+        );
+
+        ctx.strokeStyle =
+            "rgba(255,255,255,.95)";
+
+        ctx.lineWidth = 2;
+
+        ctx.shadowBlur = 10;
+
+        ctx.stroke();
+
+        for(
+            let i=0;
+            i<8;
+            i++
+        ){
+
+            const angle =
+                f.rotation +
+                i*Math.PI/4;
+
+            const inner =
+                f.radius*.75;
+
+            const outer =
+                f.radius*1.5;
+
+            ctx.beginPath();
+
+            ctx.moveTo(
+                f.x +
+                Math.cos(angle)*inner,
+
+                f.y +
+                Math.sin(angle)*inner
+            );
+
+            ctx.lineTo(
+                f.x +
+                Math.cos(angle)*outer,
+
+                f.y +
+                Math.sin(angle)*outer
+            );
+
+            ctx.strokeStyle =
+                feedbackColor;
+
+            ctx.lineWidth = 2;
+
+            ctx.stroke();
+        }
+
+        ctx.beginPath();
+
+        ctx.arc(
+            f.x,
+            f.y,
+            7,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fillStyle =
+            "white";
+
+        ctx.shadowBlur = 25;
+
+        ctx.shadowColor =
+            feedbackColor;
+
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
+
+/* =========================================================
+   FLASH
+========================================================= */
+
+let flashAlpha = 0;
+
+function flash(){
+    flashAlpha = .22;
+}
+
+function updateFlash(){
+    flashAlpha *= .86;
+}
+
+function drawFlash(){
+
+    if(flashAlpha<=.01)
+        return;
+
+    ctx.save();
+
+    ctx.fillStyle =
+        `rgba(255,255,255,${flashAlpha})`;
+
+    ctx.fillRect(
+        0,
+        0,
+        W,
+        H
+    );
+
+    ctx.restore();
+}
+
+
+/* =========================================================
+   MIRRORED POSE
+========================================================= */
+
+function mirroredX(lm){
+    return px(1-lm.x);
+}
+
+function isPointVisible(lm){
+    return lm && (lm.visibility === undefined || lm.visibility >= .25);
+}
+
+function drawSkeleton(landmarks){
+
+    if(!landmarks)
+        return;
+
+    const connections = [
+
+        [LEFT_SHOULDER,RIGHT_SHOULDER],
+
+        [LEFT_SHOULDER,LEFT_ELBOW],
+        [LEFT_ELBOW,LEFT_WRIST],
+
+        [RIGHT_SHOULDER,RIGHT_ELBOW],
+        [RIGHT_ELBOW,RIGHT_WRIST],
+
+        [LEFT_SHOULDER,LEFT_HIP],
+        [RIGHT_SHOULDER,RIGHT_HIP],
+
+        [LEFT_HIP,RIGHT_HIP],
+
+        [LEFT_HIP,LEFT_KNEE],
+        [LEFT_KNEE,LEFT_ANKLE],
+
+        [RIGHT_HIP,RIGHT_KNEE],
+        [RIGHT_KNEE,RIGHT_ANKLE]
+    ];
+
+    ctx.save();
+
+    ctx.lineWidth = 3;
+
+    ctx.strokeStyle =
+        "rgba(0,245,255,.5)";
+
+    ctx.shadowBlur = 10;
+
+    ctx.shadowColor =
+        "#00f5ff";
+
+    for(
+        const [a,b]
+        of connections
+    ){
+
+        const A =
+            landmarks[a];
+
+        const B =
+            landmarks[b];
+
+        if(
+            !A ||
+            !B ||
+            !isPointVisible(A) ||
+            !isPointVisible(B)
+        )
+            continue;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            mirroredX(A),
+            py(A.y)
+        );
+
+        ctx.lineTo(
+            mirroredX(B),
+            py(B.y)
+        );
+
+        ctx.stroke();
+    }
+
+    const important = [
+
+        NOSE,
+
+        LEFT_SHOULDER,
+        RIGHT_SHOULDER,
+
+        LEFT_ELBOW,
+        RIGHT_ELBOW,
+
+        LEFT_WRIST,
+        RIGHT_WRIST,
+
+        LEFT_HIP,
+        RIGHT_HIP,
+
+        LEFT_KNEE,
+        RIGHT_KNEE,
+
+        LEFT_ANKLE,
+        RIGHT_ANKLE
+    ];
+
+    for(
+        const id of important
+    ){
+
+        const lm =
+            landmarks[id];
+
+        if(
+            !lm ||
+            !isPointVisible(lm)
+        )
+            continue;
+
+        const x =
+            mirroredX(lm);
+
+        const y =
+            py(lm.y);
+
+        ctx.beginPath();
+
+        ctx.arc(
+            x,
+            y,
+            5,
+            0,
+            Math.PI*2
+        );
+
+        ctx.fillStyle =
+            "#ffffff";
+
+        ctx.shadowBlur = 15;
+
+        ctx.shadowColor =
+            "#00f5ff";
+
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+
+/* =========================================================
+   CALIBRATION
+========================================================= */
+
+let calibrationStableFrames = 0;
+
+const CALIBRATION_REQUIRED = 55;
+
+function getVisibleLandmarks(){
+
+    if(!poseLandmarks)
+        return [];
+
+    const required = [
+
+        NOSE,
+
+        LEFT_SHOULDER,
+        RIGHT_SHOULDER,
+
+        LEFT_HIP,
+        RIGHT_HIP,
+
+        LEFT_KNEE,
+        RIGHT_KNEE,
+
+        LEFT_ANKLE,
+        RIGHT_ANKLE
+    ];
+
+    return required.filter(
+        id =>
+            poseLandmarks[id] &&
+            (poseLandmarks[id].visibility === undefined || poseLandmarks[id].visibility >= .25)
+    );
+}
+
+function getBodyBounds(){
+
+    if(!poseLandmarks)
+        return null;
+
+    const ids = [
+
+        NOSE,
+
+        LEFT_SHOULDER,
+        RIGHT_SHOULDER,
+
+        LEFT_ELBOW,
+        RIGHT_ELBOW,
+
+        LEFT_WRIST,
+        RIGHT_WRIST,
+
+        LEFT_HIP,
+        RIGHT_HIP,
+
+        LEFT_KNEE,
+        RIGHT_KNEE,
+
+        LEFT_ANKLE,
+        RIGHT_ANKLE
+    ];
+
+    const points = [];
+
+    for(const id of ids){
+
+        const lm =
+            poseLandmarks[id];
+
+        if(
+            lm &&
+            (lm.visibility === undefined || lm.visibility >= .2)
+        ){
+            points.push(lm);
+        }
+    }
+
+    if(points.length < 4)
+        return null;
+
+    let minX = 1;
+    let maxX = 0;
+    let minY = 1;
+    let maxY = 0;
+
+    for(const p of points){
+
+        minX = Math.min(minX,p.x);
+        maxX = Math.max(maxX,p.x);
+        minY = Math.min(minY,p.y);
+        maxY = Math.max(maxY,p.y);
+    }
+
+    return {
+
+        minX,
+        maxX,
+        minY,
+        maxY,
+
+        width:
+            maxX-minX,
+
+        height:
+            maxY-minY,
+
+        centerX:
+            (minX+maxX)/2,
+
+        centerY:
+            (minY+maxY)/2
+    };
+}
+
+function evaluateCalibration(){
+
+    const visible =
+        getVisibleLandmarks();
+
+    if(visible.length < 5){
+
+        calibrationStableFrames = 0;
+
+        return {
+
+            detected:false,
+            good:false,
+
+            message:
+                "WAITING FOR PLAYER",
+
+            detail:
+                "请进入摄像头范围"
+        };
+    }
+
+    const bounds =
+        getBodyBounds();
+
+    if(!bounds){
+
+        calibrationStableFrames = 0;
+
+        return {
+
+            detected:true,
+            good:false,
+
+            message:
+                "SCANNING BODY",
+
+            detail:
+                "正在识别身体轮廓"
+        };
+    }
+
+    const bodyHeight =
+        bounds.height;
+
+    const centerX =
+        bounds.centerX;
+
+    const centerGood =
+        centerX > .39 &&
+        centerX < .61;
+
+    const heightGood =
+        bodyHeight > .48 &&
+        bodyHeight < .92;
+
+    const widthGood =
+        bounds.width > .12 &&
+        bounds.width < .9;
+
+    let message =
+        "ADJUST POSITION";
+
+    let detail =
+        "";
+
+    if(!heightGood){
+
+        calibrationStableFrames = 0;
+
+        if(bodyHeight < .48){
+
+            message =
+                "MOVE CLOSER";
+
+            detail =
+                "请靠近摄像头一点";
+        }
+        else{
+
+            message =
+                "MOVE BACK";
+
+            detail =
+                "请离摄像头远一点";
+        }
+
+    }
+    else if(!centerGood){
+
+        calibrationStableFrames = 0;
+
+        if(centerX < .39){
+
+            message =
+                "MOVE RIGHT";
+
+            detail =
+                "请向右移动一点";
+        }
+        else{
+
+            message =
+                "MOVE LEFT";
+
+            detail =
+                "请向左移动一点";
+        }
+
+    }
+    else if(!widthGood){
+
+        calibrationStableFrames = 0;
+
+        message =
+            "CENTER YOUR BODY";
+
+        detail =
+            "请让身体完整进入轮廓";
+
+    }
+    else{
+
+        calibrationStableFrames++;
+
+        message =
+            "GOOD POSITION";
+
+        detail =
+            "保持姿势，不要移动";
+    }
+
+    const good =
+        heightGood &&
+        centerGood &&
+        widthGood;
+
+    return {
+
+        detected:true,
+
+        good,
+
+        message,
+
+        detail,
+
+        progress:
+            clamp(
+                calibrationStableFrames /
+                CALIBRATION_REQUIRED,
+                0,
+                1
+            )
+    };
+}
+
+function updateCalibrationUI(){
+
+    if(state !== CALIBRATION)
+        return;
+
+    const result =
+        evaluateCalibration();
+
+    if(!result.detected){
+
+        bodyGuide.classList.remove(
+            "detected",
+            "good"
+        );
+
+        calibrationMain.textContent =
+            result.message;
+
+        calibrationMain.style.color =
+            "#ff3b5f";
+
+        calibrationDetail.textContent =
+            result.detail;
+
+        calibrationProgress.style.width =
+            "0%";
+
+        return;
+    }
+
+    bodyGuide.classList.add(
+        "detected"
+    );
+
+    if(result.good){
+
+        bodyGuide.classList.add(
+            "good"
+        );
+
+        calibrationMain.style.color =
+            "#b7ff00";
+
+        calibrationMain.textContent =
+            result.message;
+
+        calibrationDetail.textContent =
+            result.detail;
+
+        calibrationProgress.style.width =
+            `${result.progress*100}%`;
+
+        if(
+            calibrationStableFrames >=
+            CALIBRATION_REQUIRED
+        ){
+            lockCalibration();
+        }
+
+    }
+    else{
+
+        bodyGuide.classList.remove(
+            "good"
+        );
+
+        calibrationMain.style.color =
+            "#00f5ff";
+
+        calibrationMain.textContent =
+            result.message;
+
+        calibrationDetail.textContent =
+            result.detail;
+
+        calibrationProgress.style.width =
+            "0%";
+    }
+}
+
+let calibrationLocked = false;
+
+function lockCalibration(){
+
+    if(calibrationLocked)
+        return;
+
+    calibrationLocked = true;
+
+    calibrationMain.textContent =
+        "POSITION LOCKED";
+
+    calibrationMain.style.color =
+        "#b7ff00";
+
+    calibrationDetail.textContent =
+        "准备开始训练";
+
+    calibrationProgress.style.width =
+        "100%";
+
+    bodyGuide.classList.add(
+        "good"
+    );
+
+    beep(
+        1000,
+        .15,
+        "sine",
+        .08
+    );
+
+    setTimeout(()=>{
+
+        calibration.style.display =
+            "none";
+
+        calibrationLocked = false;
+
+        startLevelCountdown(1);
+
+    },700);
+}
+
+function startCalibration(){
+
+    state =
+        CALIBRATION;
+
+    currentLevel = 0;
+
+    calibrationStableFrames = 0;
+
+    calibrationLocked = false;
+
+    calibration.style.display =
+        "flex";
+
+    startScreen.style.display =
+        "none";
+
+    countdown.style.display =
+        "none";
+
+    gameover.style.display =
+        "none";
+
+    stageValue.textContent =
+        "CALIBRATE";
+
+    timeValue.textContent =
+        "--";
+
+    bodyGuide.classList.remove(
+        "detected",
+        "good"
+    );
+
+    calibrationMain.textContent =
+        "WAITING FOR PLAYER";
+
+    calibrationMain.style.color =
+        "#ff3b5f";
+
+    calibrationDetail.textContent =
+        "正在寻找人体";
+
+    calibrationProgress.style.width =
+        "0%";
+}
+
+
+/* =========================================================
+   COUNTDOWN
+========================================================= */
+
+let countdownTimer = null;
+
+function startLevelCountdown(level){
+
+    state =
+        COUNTDOWN;
+
+    currentLevel =
+        level;
+
+    countdown.style.display =
+        "flex";
+
+    stageValue.textContent =
+        "READY";
+
+    let count = 3;
+
+    countNumber.textContent =
+        count;
+
+    countdownTimer =
+        setInterval(()=>{
+
+            count--;
+
+            if(count > 0){
+
+                countNumber.textContent =
+                    count;
+
+                countNumber.style.animation =
+                    "none";
+
+                void countNumber.offsetWidth;
+
+                countNumber.style.animation =
+                    "countPop .8s ease";
+
+                countdownSound();
+
+            }
+            else{
+
+                clearInterval(
+                    countdownTimer
+                );
+
+                countNumber.textContent =
+                    "GO";
+
+                countNumber.style.animation =
+                    "none";
+
+                void countNumber.offsetWidth;
+
+                countNumber.style.animation =
+                    "countPop .8s ease";
+
+                goSound();
+
+                setTimeout(()=>{
+
+                    countdown.style.display =
+                        "none";
+
+                    startLevel(level);
+
+                },600);
+            }
+
+        },900);
+}
+
+
+/* =========================================================
+   GAME LEVEL
+========================================================= */
+
+function startLevel(level){
+
+    currentLevel =
+        level;
+
+    if(level === 1){
+
+        state =
+            LEVEL1;
+
+        stageValue.textContent =
+            "LEVEL 01";
+
+        startLevel1();
+
+    }
+    else if(level === 2){
+
+        state =
+            LEVEL2;
+
+        stageValue.textContent =
+            "LEVEL 02";
+
+        startLevel2();
+    }
+}
+
+
+/* =========================================================
+   TIMER
+========================================================= */
+
+function startTimer(seconds){
+
+    clearInterval(
+        gameTimer
+    );
+
+    timeLeft =
+        seconds;
+
+    updateTimer();
+
+    gameTimer =
+        setInterval(()=>{
+
+            timeLeft--;
+
+            updateTimer();
+
+            if(timeLeft <= 0){
+
+                clearInterval(
+                    gameTimer
+                );
+
+                endLevel();
+            }
+
+        },1000);
+}
+
+function updateTimer(){
+
+    timeValue.textContent =
+        String(
+            Math.max(
+                0,
+                timeLeft
+            )
+        ).padStart(2,"0");
+}
+
+
+/* =========================================================
+   LEVEL 1
+   OVER-SHOULDER ENERGY BLADE (SWING TO SLICE)
+========================================================= */
+
+let objects = [];
+
+let level1SpawnTimer = null;
+
+let bladeActive = false;
+
+let bladeCooldown = 0;
+
+let bombPenaltyCooldown = 0;
+
+let prevWristPos = { x: 0, y: 0 };
+let wristSpeed = 0;
+
+
+/* =========================================================
+   START LEVEL 1
+========================================================= */
+
+function startLevel1(){
+
+    objects = [];
+
+    bladeActive = false;
+
+    bladeCooldown = 0;
+
+    bombPenaltyCooldown = 0;
+
+    prevWristPos = { x: 0, y: 0 };
+    wristSpeed = 0;
+
+    clearInterval(
+        level1SpawnTimer
+    );
+
+    startTimer(30);
+
+    spawnLevel1Object();
+
+    level1SpawnTimer =
+        setInterval(
+            ()=>{
+                if(
+                    state === LEVEL1 &&
+                    objects.length === 0
+                ){
+                    spawnLevel1Object();
+                }
+            },
+            350
+        );
+
+    showToast(
+        "SWING ARM TO SLICE FRUITS"
+    );
+}
+
+
+/* =========================================================
+   LEVEL 1 OBJECT SPAWN
+========================================================= */
+
+function spawnLevel1Object(){
+
+    if(
+        state !== LEVEL1 ||
+        objects.length > 0
+    )
+        return;
+
+    const type =
+        Math.random() < .72
+            ? "fruit"
+            : "bomb";
+
+    const startX =
+        W * (
+            .16 +
+            Math.random() * .68
+        );
+
+    const shoulder =
+        poseLandmarks &&
+        poseLandmarks[RIGHT_SHOULDER] &&
+        isPointVisible(poseLandmarks[RIGHT_SHOULDER])
+            ? py(poseLandmarks[RIGHT_SHOULDER].y)
+            : H*.34;
+
+    const targetY =
+        clamp(
+            shoulder - H*.10 - Math.random()*H*.06,
+            H*.16,
+            H*.42
+        );
+
+    const startY =
+        H * (
+            .72 +
+            Math.random() * .08
+        );
+
+    const horizontalDrift =
+        (
+            Math.random() - .5
+        ) * W * .16;
+
+    const timeElapsed = Math.max(0, 30 - timeLeft);
+    const speedMultiplier = 1 + (timeElapsed * 0.035);
+
+    objects.push({
+
+        type,
+
+        x:startX,
+
+        y:startY,
+
+        startX,
+
+        startY,
+
+        targetY,
+
+        horizontalDrift,
+
+        progress:0,
+
+        speed:
+            (.018 + Math.random() * .006) * speedMultiplier,
+
+        radius:
+            38,
+
+        rotation:
+            Math.random() *
+            Math.PI * 2,
+
+        rotationSpeed:
+            (
+                Math.random() - .5
+            ) * .035 * speedMultiplier,
+
+        active:true,
+
+        hit:false,
+
+        hold:0,
+
+        fallProgress:0
+
+    });
+}
+
+
+/* =========================================================
+   FRUIT
+========================================================= */
+
+function drawFruit(o){
+
+    ctx.save();
+
+    ctx.translate(
+        o.x,
+        o.y
+    );
+
+    ctx.rotate(
+        o.rotation
+    );
+
+    ctx.shadowBlur =
+        35;
+
+    ctx.shadowColor =
+        "#b7ff00";
+
+    ctx.fillStyle =
+        "#b7ff00";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        0,
+        0,
+        o.radius,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fill();
+
+    ctx.shadowBlur =
+        0;
+
+    ctx.fillStyle =
+        "rgba(255,255,255,.85)";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        -12,
+        -12,
+        9,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fill();
+
+    ctx.fillStyle =
+        "#00c853";
+
+    ctx.beginPath();
+
+    ctx.ellipse(
+        13,
+        -32,
+        12,
+        6,
+        -.5,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fill();
+
+    ctx.restore();
+}
+
+
+/* =========================================================
+   BOMB
+========================================================= */
+
+function drawBomb(o){
+
+    ctx.save();
+
+    ctx.translate(
+        o.x,
+        o.y
+    );
+
+    ctx.rotate(
+        o.rotation
+    );
+
+    ctx.shadowBlur =
+        35;
+
+    ctx.shadowColor =
+        "#ff3b5f";
+
+    ctx.fillStyle =
+        "#171b25";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        0,
+        0,
+        o.radius,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fill();
+
+    ctx.strokeStyle =
+        "#ff3b5f";
+
+    ctx.lineWidth = 4;
+
+    ctx.stroke();
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        15,
+        -32
+    );
+
+    ctx.quadraticCurveTo(
+        25,
+        -50,
+        40,
+        -42
+    );
+
+    ctx.strokeStyle =
+        "#ffcc00";
+
+    ctx.lineWidth = 4;
+
+    ctx.stroke();
+
+    ctx.fillStyle =
+        "#ffcc00";
+
+    ctx.shadowBlur =
+        20;
+
+    ctx.shadowColor =
+        "#ffcc00";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        41,
+        -42,
+        5,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fill();
+
+    ctx.restore();
+}
+
+
+/* =========================================================
+   BLADE STATE & SWING SPEED
+========================================================= */
+
+function getRightArmData(){
+
+    if(!poseLandmarks)
+        return null;
+
+    const shoulder =
+        poseLandmarks[
+            RIGHT_SHOULDER
+        ];
+
+    const elbow =
+        poseLandmarks[
+            RIGHT_ELBOW
+        ];
+
+    const wrist =
+        poseLandmarks[
+            RIGHT_WRIST
+        ];
+
+    if(
+        !shoulder ||
+        !elbow ||
+        !wrist
+    )
+        return null;
+
+    if(
+        !isPointVisible(shoulder) ||
+        !isPointVisible(elbow) ||
+        !isPointVisible(wrist)
+    )
+        return null;
+
+    return {
+        shoulder,
+        elbow,
+        wrist
+    };
+}
+
+function evaluateBladePose(){
+
+    const arm =
+        getRightArmData();
+
+    if(!arm)
+        return false;
+
+    const shoulder =
+        arm.shoulder;
+
+    const elbow =
+        arm.elbow;
+
+    const wrist =
+        arm.wrist;
+
+    const hip =
+        poseLandmarks[
+            LEFT_HIP
+        ];
+
+    if(!hip)
+        return false;
+
+    const bodyScale =
+        Math.max(
+            .15,
+            Math.abs(
+                shoulder.y -
+                hip.y
+            )
+        );
+
+    const wristAboveShoulder =
+        wrist.y <
+        shoulder.y -
+        bodyScale * .025;
+
+    const wristAboveElbow =
+        wrist.y <
+        elbow.y -
+        bodyScale * .01;
+
+    const elbowReasonable =
+        elbow.y <
+        shoulder.y +
+        bodyScale * .22;
+
+    const armExtendedEnough =
+        Math.hypot(
+            wrist.x - elbow.x,
+            wrist.y - elbow.y
+        ) >
+        bodyScale * .16;
+
+    return (
+        wristAboveShoulder &&
+        wristAboveElbow &&
+        elbowReasonable &&
+        armExtendedEnough
+    );
+}
+
+
+/* =========================================================
+   UPDATE BLADE
+========================================================= */
+
+function updateBlade(){
+
+    const arm = getRightArmData();
+
+    if(arm){
+        const wx = mirroredX(arm.wrist);
+        const wy = py(arm.wrist.y);
+
+        if(prevWristPos.x !== 0 || prevWristPos.y !== 0){
+            wristSpeed = Math.hypot(wx - prevWristPos.x, wy - prevWristPos.y);
+        }
+        prevWristPos = { x: wx, y: wy };
+    } else {
+        wristSpeed = 0;
+        prevWristPos = { x: 0, y: 0 };
+    }
+
+    const valid =
+        evaluateBladePose();
+
+    if(valid){
+
+        if(!bladeActive){
+
+            bladeActive = true;
+
+            showToast(
+                "READY TO SWING"
+            );
+
+            beep(
+                720,
+                .08,
+                "triangle",
+                .045
+            );
+        }
+
+    }
+    else{
+
+        if(bladeActive){
+
+            bladeActive = false;
+        }
+    }
+
+    if(bladeCooldown > 0)
+        bladeCooldown--;
+
+    if(bombPenaltyCooldown > 0)
+        bombPenaltyCooldown--;
+}
+
+
+/* =========================================================
+   DRAW ENERGY BLADE
+========================================================= */
+
+function drawEnergyBlade(){
+
+    if(!bladeActive)
+        return;
+
+    const arm =
+        getRightArmData();
+
+    if(!arm)
+        return;
+
+    const ex =
+        mirroredX(arm.elbow);
+
+    const ey =
+        py(arm.elbow.y);
+
+    const wx =
+        mirroredX(arm.wrist);
+
+    const wy =
+        py(arm.wrist.y);
+
+    const dx =
+        wx-ex;
+
+    const dy =
+        wy-ey;
+
+    const len =
+        Math.hypot(dx,dy);
+
+    if(len < 10)
+        return;
+
+    const nx =
+        -dy/len;
+
+    const ny =
+        dx/len;
+
+    const hip =
+        poseLandmarks[
+            LEFT_HIP
+        ];
+
+    const bodyScale =
+        hip
+            ? Math.abs(
+                arm.shoulder.y -
+                hip.y
+            )
+            : .35;
+
+    const extension =
+        clamp(
+            bodyScale * H * .30,
+            65,
+            125
+        );
+
+    const tipX =
+        wx +
+        dx/len*
+        extension;
+
+    const tipY =
+        wy +
+        dy/len*
+        extension;
+
+    const baseWidth = 12;
+    const tipWidth = 4;
+
+    ctx.save();
+
+    ctx.shadowBlur =
+        35;
+
+    ctx.shadowColor =
+        "#b7ff00";
+
+    ctx.strokeStyle =
+        "rgba(183,255,0,.45)";
+
+    ctx.lineWidth =
+        24;
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        ex,
+        ey
+    );
+
+    ctx.lineTo(
+        tipX,
+        tipY
+    );
+
+    ctx.stroke();
+
+    const baseLeftX =
+        wx +
+        nx*baseWidth;
+
+    const baseLeftY =
+        wy +
+        ny*baseWidth;
+
+    const baseRightX =
+        wx -
+        nx*baseWidth;
+
+    const baseRightY =
+        wy -
+        ny*baseWidth;
+
+    const tipLeftX =
+        tipX +
+        nx*tipWidth;
+
+    const tipLeftY =
+        tipY +
+        ny*tipWidth;
+
+    const tipRightX =
+        tipX -
+        nx*tipWidth;
+
+    const tipRightY =
+        tipY -
+        ny*tipWidth;
+
+    const gradient =
+        ctx.createLinearGradient(
+            wx,
+            wy,
+            tipX,
+            tipY
+        );
+
+    gradient.addColorStop(
+        0,
+        "#ffffff"
+    );
+
+    gradient.addColorStop(
+        .25,
+        "#b7ff00"
+    );
+
+    gradient.addColorStop(
+        .7,
+        "#dfff80"
+    );
+
+    gradient.addColorStop(
+        1,
+        "rgba(183,255,0,.1)"
+    );
+
+    ctx.fillStyle =
+        gradient;
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        baseLeftX,
+        baseLeftY
+    );
+
+    ctx.lineTo(
+        tipLeftX,
+        tipLeftY
+    );
+
+    ctx.lineTo(
+        tipRightX,
+        tipRightY
+    );
+
+    ctx.lineTo(
+        baseRightX,
+        baseRightY
+    );
+
+    ctx.closePath();
+
+    ctx.fill();
+
+    ctx.shadowBlur =
+        20;
+
+    ctx.shadowColor =
+        "#ffffff";
+
+    ctx.strokeStyle =
+        "rgba(255,255,255,.95)";
+
+    ctx.lineWidth = 3;
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+        tipLeftX,
+        tipLeftY
+    );
+
+    ctx.lineTo(
+        tipRightX,
+        tipRightY
+    );
+
+    ctx.stroke();
+
+    ctx.strokeStyle =
+        "rgba(183,255,0,.8)";
+
+    ctx.lineWidth = 2;
+
+    for(let i=0;i<3;i++){
+
+        const offset =
+            (i-1)*7;
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            ex +
+            nx*offset,
+            ey +
+            ny*offset
+        );
+
+        ctx.lineTo(
+            tipX +
+            nx*offset,
+            tipY +
+            ny*offset
+        );
+
+        ctx.stroke();
+    }
+
+    ctx.shadowBlur =
+        25;
+
+    ctx.shadowColor =
+        "#b7ff00";
+
+    ctx.strokeStyle =
+        "#b7ff00";
+
+    ctx.lineWidth = 4;
+
+    ctx.beginPath();
+
+    ctx.arc(
+        wx,
+        wy,
+        16,
+        0,
+        Math.PI*2
+    );
+
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+
+/* =========================================================
+   BLADE COLLISION
+========================================================= */
+
+function pointToSegmentDistance(
+    px1,
+    py1,
+    x1,
+    y1,
+    x2,
+    y2
+){
+
+    const dx =
+        x2-x1;
+
+    const dy =
+        y2-y1;
+
+    const lengthSq =
+        dx*dx +
+        dy*dy;
+
+    if(lengthSq === 0){
+
+        return Math.hypot(
+            px1-x1,
+            py1-y1
+        );
+    }
+
+    let t =
+        (
+            (px1-x1)*dx +
+            (py1-y1)*dy
+        ) /
+        lengthSq;
+
+    t =
+        clamp(
+            t,
+            0,
+            1
+        );
+
+    const cx =
+        x1+t*dx;
+
+    const cy =
+        y1+t*dy;
+
+    return Math.hypot(
+        px1-cx,
+        py1-cy
+    );
+}
+
+function getBladeSegment(){
+
+    const arm =
+        getRightArmData();
+
+    if(!arm)
+        return null;
+
+    const ex =
+        mirroredX(arm.elbow);
+
+    const ey =
+        py(arm.elbow.y);
+
+    const wx =
+        mirroredX(arm.wrist);
+
+    const wy =
+        py(arm.wrist.y);
+
+    const dx =
+        wx-ex;
+
+    const dy =
+        wy-ey;
+
+    const len =
+        Math.hypot(dx,dy);
+
+    if(len < 10)
+        return null;
+
+    const hip =
+        poseLandmarks[
+            LEFT_HIP
+        ];
+
+    const bodyScale =
+        hip
+            ? Math.abs(
+                arm.shoulder.y -
+                hip.y
+            )
+            : .35;
+
+    const tipExtension =
+        clamp(
+            bodyScale * H * .30,
+            65,
+            125
+        );
+
+    const tipX =
+        wx +
+        dx/len*
+        tipExtension;
+
+    const tipY =
+        wy +
+        dy/len*
+        tipExtension;
+
+    return {
+        x1:ex,
+        y1:ey,
+        x2:tipX,
+        y2:tipY
+    };
+}
+
+
+/* =========================================================
+   LEVEL 1 UPDATE (只有挥动手臂才能斩切)
+========================================================= */
+
+function updateLevel1(){
+
+    updateBlade();
+
+    if(objects.length === 0){
+        spawnLevel1Object();
+    }
+
+    for(
+        const o of objects
+    ){
+
+        o.rotation +=
+            o.rotationSpeed;
+
+        if(
+            o.progress < 1
+        ){
+
+            o.progress =
+                Math.min(
+                    1,
+                    o.progress +
+                    o.speed
+                );
+
+            const t =
+                o.progress;
+
+            const ease =
+                1 -
+                Math.pow(
+                    1-t,
+                    3
+                );
+
+            o.y =
+                o.startY +
+                (
+                    o.targetY -
+                    o.startY
+                ) * ease;
+
+            o.x =
+                o.startX +
+                Math.sin(
+                    t * Math.PI
+                ) *
+                o.horizontalDrift;
+
+        }
+        else{
+
+            o.hold += .016;
+
+            if(
+                o.hold > .65
+            ){
+
+                o.fallProgress =
+                    Math.min(
+                        1,
+                        o.fallProgress +
+                        .015
+                    );
+
+                o.y =
+                    o.targetY +
+                    (
+                        H*.60
+                    ) *
+                    o.fallProgress;
+
+                o.x =
+                    o.startX +
+                    Math.sin(
+                        o.fallProgress *
+                        Math.PI *
+                        2
+                    ) *
+                    o.horizontalDrift;
+            }
+        }
+    }
+
+    if(bladeActive){
+
+        const blade =
+            getBladeSegment();
+
+        if(blade){
+
+            // 检查挥手臂的速度阈值 (必须挥动)
+            const SWING_THRESHOLD = H * 0.012; // 挥臂速度判定阈值
+            const isSwinging = wristSpeed > SWING_THRESHOLD;
+
+            for(
+                const o of objects
+            ){
+
+                if(
+                    o.hit
+                )
+                    continue;
+
+                const d =
+                    pointToSegmentDistance(
+                        o.x,
+                        o.y,
+                        blade.x1,
+                        blade.y1,
+                        blade.x2,
+                        blade.y2
+                    );
+
+                if(
+                    d <
+                    o.radius +
+                    24
+                ){
+
+                    if(o.type === "fruit"){
+                        // 必须挥动才判定斩切成功
+                        if(isSwinging){
+                            o.hit = true;
+                            successBladeHit(o);
+                        }
+                    }
+                    else{
+                        // 炸弹碰触即炸
+                        o.hit = true;
+                        hitBomb(o);
+                    }
+                }
+            }
+        }
+    }
+
+    objects =
+        objects.filter(
+            o =>
+                !o.hit
+        );
+
+    objects =
+        objects.filter(
+            o => {
+                if(o.progress < 1) return true;
+                return o.y < H * .85;
+            }
+        );
+}
+
+
+/* =========================================================
+   FRUIT HIT
+========================================================= */
+
+function successBladeHit(o){
+
+    score += 10;
+
+    combo++;
+
+    updateHUD();
+
+    showToast(
+        "+10  SWING SLICE!"
+    );
+
+    burst(
+        o.x,
+        o.y,
+        "#b7ff00",
+        26
+    );
+
+    for(let i=0;i<3;i++){
+
+        setTimeout(()=>{
+
+            burst(
+                o.x,
+                o.y,
+                "#ffffff",
+                7
+            );
+
+        },i*45);
+    }
+
+    flash();
+
+    if(poseLandmarks){
+
+        const wrist =
+            poseLandmarks[
+                RIGHT_WRIST
+            ];
+
+        if(
+            wrist &&
+            isPointVisible(wrist)
+        ){
+
+            const x =
+                mirroredX(wrist);
+
+            const y =
+                py(wrist.y);
+
+            addBodyFeedback(
+                x,
+                y,
+                "throw"
+            );
+
+            burst(
+                x,
+                y,
+                "#b7ff00",
+                12
+            );
+        }
+    }
+
+    throwSuccessSound();
+}
+
+
+/* =========================================================
+   BOMB HIT
+========================================================= */
+
+function hitBomb(o){
+
+    if(
+        bombPenaltyCooldown > 0
+    )
+        return;
+
+    bombPenaltyCooldown =
+        30;
+
+    combo = 0;
+
+    score =
+        Math.max(
+            0,
+            score-5
+        );
+
+    updateHUD();
+
+    showToast(
+        "BOMB! -5"
+    );
+
+    burst(
+        o.x,
+        o.y,
+        "#ff3b5f",
+        34
+    );
+
+    flash();
+
+    wrongSound();
+}
+
+
+/* =========================================================
+   LEVEL 2
+   DEPTH CATCH (正中间上中下不连续重复)
+========================================================= */
+
+let ball = null;
+
+let catchCooldown = 0;
+
+let level2SpawnTimeout = null;
+
+let catchGrip = { active:false, x:0, y:0, strength:0 };
+
+let lastBallType = null; // 记录上一次出现的位置，防止连续重复
+
+
+/* =========================================================
+   START LEVEL 2
+========================================================= */
+
+function startLevel2(){
+
+    ball = null;
+
+    catchCooldown = 0;
+    catchGrip.active = false;
+    catchGrip.strength = 0;
+    lastBallType = null;
+
+    clearTimeout(
+        level2SpawnTimeout
+    );
+
+    startTimer(30);
+
+    spawnBall();
+
+    showToast(
+        "CATCH THE CENTER BALL"
+    );
+}
+
+
+/* =========================================================
+   SPAWN BALL (正中间，上中下随机，不连续重复)
+========================================================= */
+
+function spawnBall(){
+
+    if(state !== LEVEL2)
+        return;
+
+    const allTypes = ["HIGH", "MID", "LOW"];
+
+    // 过滤掉上一次出现的位置，确保不会连续在同一个地方出现
+    const availableTypes = allTypes.filter(t => t !== lastBallType);
+
+    const type = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+    lastBallType = type;
+
+    let targetY;
+
+    if(type === "HIGH"){
+        targetY = H * 0.28;
+    }
+    else if(type === "MID"){
+        targetY = H * 0.50;
+    }
+    else{
+        targetY = H * 0.72;
+    }
+
+    const timeElapsed = Math.max(0, 30 - timeLeft);
+    const speedMultiplier = 1 + (timeElapsed * 0.04);
+
+    ball = {
+        // 严格固定在水平正中间
+        x: W * 0.5,
+
+        y: targetY,
+
+        targetY,
+
+        type,
+
+        depth:0,
+
+        depthSpeed: 0.012 * speedMultiplier,
+
+        radius:18,
+
+        rotation:0,
+
+        trail:[],
+
+        active:true
+    };
+}
+
+
+/* =========================================================
+   DRAW BALL
+========================================================= */
+
+function drawBall(){
+
+    if(!ball)
+        return;
+
+    const d =
+        clamp(
+            ball.depth,
+            0,
+            1
+        );
+
+    const radius =
+        14 +
+        d*48;
+
+    const glow =
+        15 +
+        d*45;
+
+    ctx.save();
+
+    for(let i=5;i>=1;i--){
+
+        const trailDepth =
+            clamp(
+                d-i*.055,
+                0,
+                1
+            );
+
+        const trailRadius =
+            10 +
+            trailDepth*42;
+
+        const alpha =
+            (.025 +
+            trailDepth*.06) *
+            (1-i*.1);
+
+        ctx.globalAlpha =
+            alpha;
+
+        ctx.strokeStyle =
+            "#00f5ff";
+
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            ball.x,
+            ball.y,
+            trailRadius,
+            0,
+            Math.PI*2
+        );
+
+        ctx.stroke();
+    }
+
+    ctx.globalAlpha =
+        .18 +
+        d*.3;
+
+    ctx.strokeStyle =
+        "#00f5ff";
+
+    ctx.lineWidth = 2;
+
+    for(let i=0;i<8;i++){
+
+        const angle =
+            i*Math.PI/4 +
+            ball.rotation*.5;
+
+        const inner =
+            radius*1.8;
+
+        const outer =
+            radius*
+            (2.6+d*1.8);
+
+        ctx.beginPath();
+
+        ctx.moveTo(
+            ball.x +
+            Math.cos(angle)*inner,
+
+            ball.y +
+            Math.sin(angle)*inner
+        );
+
+        ctx.lineTo(
+            ball.x +
+            Math.cos(angle)*outer,
+
+            ball.y +
+            Math.sin(angle)*outer
+        );
+
+        ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
+
+    ctx.shadowBlur =
+        glow;
+
+    ctx.shadowColor =
+        "#00f5ff";
+
+    ctx.strokeStyle =
+        `rgba(0,245,255,${.25+d*.45})`;
+
+    ctx.lineWidth =
+        3+d*3;
+
+    ctx.beginPath();
+
+    ctx.arc(
+        ball.x,
+        ball.y,
+        radius*1.45,
+        0,
+        Math.PI*2
+    );
+
+    ctx.stroke();
+
+    ctx.fillStyle =
+        "#00f5ff";
+
+    ctx.beginPath();
+
+    ctx.arc(
+        ball.x,
+        ball.y,
+        radius,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fill();
+
+    const gradient =
+        ctx.createRadialGradient(
+            ball.x-radius*.35,
+            ball.y-radius*.4,
+            2,
+            ball.x,
+            ball.y,
+            radius
+        );
+
+    gradient.addColorStop(
+        0,
+        "rgba(255,255,255,.95)"
+    );
+
+    gradient.addColorStop(
+        .22,
+        "rgba(120,255,255,.95)"
+    );
+
+    gradient.addColorStop(
+        1,
+        "rgba(0,245,255,.55)"
+    );
+
+    ctx.fillStyle =
+        gradient;
+
+    ctx.beginPath();
+
+    ctx.arc(
+        ball.x,
+        ball.y,
+        radius,
+        0,
+        Math.PI*2
+    );
+
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle =
+        "rgba(255,255,255,.9)";
+
+    ctx.lineWidth =
+        2+d*2;
+
+    ctx.beginPath();
+
+    ctx.arc(
+        ball.x,
+        ball.y,
+        radius*.65,
+        -.5,
+        2.4
+    );
+
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+
+/* =========================================================
+   LEVEL 2 UPDATE
+========================================================= */
+
+function updateLevel2(){
+
+    if(catchCooldown > 0){
+        catchCooldown--;
+    }
+
+    if(!ball)
+        return;
+
+    ball.depth +=
+        ball.depthSpeed;
+
+    ball.rotation +=
+        .025 +
+        ball.depth*.04;
+
+    updateCatchGrip();
+
+    detectCatch();
+
+    if(
+        ball && ball.depth >= 1
+    ){
+
+        missBall();
+
+        return;
+    }
+}
+
+
+/* =========================================================
+   CATCH GRIP / AIM RETICLE
+========================================================= */
+
+function getCatchPose(){
+
+    if(!poseLandmarks)
+        return null;
+
+    const left = poseLandmarks[LEFT_WRIST];
+    const right = poseLandmarks[RIGHT_WRIST];
+    const ls = poseLandmarks[LEFT_SHOULDER];
+    const rs = poseLandmarks[RIGHT_SHOULDER];
+    const lh = poseLandmarks[LEFT_HIP];
+
+    if(!left || !right || !ls || !rs || !lh)
+        return null;
+
+    if(
+        !isPointVisible(left) ||
+        !isPointVisible(right) ||
+        !isPointVisible(ls) ||
+        !isPointVisible(rs)
+    )
+        return null;
+
+    const bodyScale = Math.max(.12, Math.abs(ls.y-lh.y));
+    const wristDistance = Math.hypot(left.x-right.x, left.y-right.y);
+
+    const handsTogether = wristDistance < bodyScale*.72;
+    const handsInFront =
+        ((left.y+right.y)/2) > Math.min(ls.y,rs.y) - bodyScale*.35 &&
+        ((left.y+right.y)/2) < Math.max(lh.y,ls.y) + bodyScale*.05;
+
+    if(!handsTogether || !handsInFront)
+        return null;
+
+    const x = (mirroredX(left)+mirroredX(right))/2;
+    const y = (py(left.y)+py(right.y))/2;
+
+    return { x, y, strength:1-wristDistance/(bodyScale*.72) };
+}
+
+function updateCatchGrip(){
+
+    const pose = getCatchPose();
+
+    if(!pose){
+        catchGrip.active = false;
+        catchGrip.strength = 0;
+        return;
+    }
+
+    catchGrip.active = true;
+    catchGrip.x = pose.x;
+    catchGrip.y = pose.y;
+    catchGrip.strength = pose.strength;
+}
+
+function drawCatchGrip(){
+
+    if(state !== LEVEL2 || !catchGrip.active)
+        return;
+
+    const pulse = 1 + Math.sin(performance.now()*.008)*.06;
+    const r = 42*pulse;
+
+    ctx.save();
+    ctx.translate(catchGrip.x, catchGrip.y);
+
+    ctx.shadowBlur = 24;
+    ctx.shadowColor = '#00f5ff';
+    ctx.strokeStyle = 'rgba(0,245,255,.85)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0,0,r,0,Math.PI*2);
+    ctx.stroke();
+
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    const g = 15;
+    const a = r-3;
+    ctx.beginPath();
+    ctx.moveTo(-a,-g); ctx.lineTo(-a,-a); ctx.lineTo(-g,-a);
+    ctx.moveTo(a,-g); ctx.lineTo(a,-a); ctx.lineTo(g,-a);
+    ctx.moveTo(-a,g); ctx.lineTo(-a,a); ctx.lineTo(-g,a);
+    ctx.moveTo(a,g); ctx.lineTo(a,a); ctx.lineTo(g,a);
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(0,0,6,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.font = '700 13px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    ctx.fillText('GRIP',0,r+24);
+
+    ctx.restore();
+}
+
+
+/* =========================================================
+   CATCH DETECTION
+========================================================= */
+
+function detectCatch(){
+
+    if(
+        state !== LEVEL2 ||
+        !poseLandmarks ||
+        !ball
+    )
+        return;
+
+    if(
+        catchCooldown > 0
+    ){
+
+        return;
+    }
+
+    if(
+        ball.depth < .72
+    )
+        return;
+
+    const left =
+        poseLandmarks[
+            LEFT_WRIST
+        ];
+
+    const right =
+        poseLandmarks[
+            RIGHT_WRIST
+        ];
+
+    const leftGood =
+        left &&
+        isPointVisible(left);
+
+    const rightGood =
+        right &&
+        isPointVisible(right);
+
+    if(
+        !leftGood &&
+        !rightGood &&
+        !catchGrip.active
+    )
+        return;
+
+    const catchRadius =
+        65 +
+        ball.radius;
+
+    let hit = false;
+
+    if(catchGrip.active){
+        if(
+            Math.hypot(
+                catchGrip.x-ball.x,
+                catchGrip.y-ball.y
+            ) < catchRadius
+        ){
+            hit = true;
+        }
+    }
+
+    if(!hit && leftGood){
+
+        const lx =
+            mirroredX(left);
+
+        const ly =
+            py(left.y);
+
+        if(
+            Math.hypot(
+                lx-ball.x,
+                ly-ball.y
+            ) <
+            catchRadius
+        ){
+
+            hit = true;
+        }
+    }
+
+    if(!hit && rightGood){
+
+        const rx =
+            mirroredX(right);
+
+        const ry =
+            py(right.y);
+
+        if(
+            Math.hypot(
+                rx-ball.x,
+                ry-ball.y
+            ) <
+            catchRadius
+        ){
+
+            hit = true;
+        }
+    }
+
+    if(hit){
+
+        successCatch();
+    }
+}
+
+
+/* =========================================================
+   SUCCESS CATCH
+========================================================= */
+
+function successCatch(){
+
+    if(!ball)
+        return;
+
+    const bx = ball.x;
+    const by = ball.y;
+
+    score += 15;
+
+    combo++;
+
+    updateHUD();
+
+    showToast(
+        "+15  PERFECT CATCH"
+    );
+
+    burst(
+        bx,
+        by,
+        "#00f5ff",
+        32
+    );
+
+    for(let i=0;i<4;i++){
+
+        setTimeout(()=>{
+
+            burst(
+                bx,
+                by,
+                "#00f5ff",
+                12
+            );
+
+        },i*50);
+    }
+
+    flash();
+
+    if(poseLandmarks){
+
+        const left =
+            poseLandmarks[
+                LEFT_WRIST
+            ];
+
+        const right =
+            poseLandmarks[
+                RIGHT_WRIST
+            ];
+
+        if(
+            left &&
+            isPointVisible(left)
+        ){
+
+            const x =
+                mirroredX(left);
+
+            const y =
+                py(left.y);
+
+            addBodyFeedback(
+                x,
+                y,
+                "catch"
+            );
+
+            burst(
+                x,
+                y,
+                "#00f5ff",
+                10
+            );
+        }
+
+        if(
+            right &&
+            isPointVisible(right)
+        ){
+
+            const x =
+                mirroredX(right);
+
+            const y =
+                py(right.y);
+
+            addBodyFeedback(
+                x,
+                y,
+                "catch"
+            );
+
+            burst(
+                x,
+                y,
+                "#00f5ff",
+                10
+            );
+        }
+    }
+
+    catchSuccessSound();
+
+    catchCooldown =
+        25;
+
+    ball = null;
+    catchGrip.active = false;
+
+    clearTimeout(level2SpawnTimeout);
+    level2SpawnTimeout =
+        setTimeout(
+            spawnBall,
+            550
+        );
+}
+
+
+/* =========================================================
+   MISS BALL
+========================================================= */
+
+function missBall(){
+
+    if(!ball)
+        return;
+
+    const bx = ball.x;
+    const by = ball.y;
+
+    showToast(
+        "MISS"
+    );
+
+    burst(
+        bx,
+        by,
+        "#00f5ff",
+        12
+    );
+
+    ball = null;
+    catchGrip.active = false;
+
+    catchCooldown =
+        30;
+
+    clearTimeout(level2SpawnTimeout);
+    level2SpawnTimeout =
+        setTimeout(
+            spawnBall,
+            450
+        );
+}
+
+
+/* =========================================================
+   END LEVEL
+========================================================= */
+
+function endLevel(){
+
+    clearInterval(
+        gameTimer
+    );
+
+    clearInterval(
+        level1SpawnTimer
+    );
+
+    clearTimeout(
+        level2SpawnTimeout
+    );
+
+    objects = [];
+
+    ball = null;
+
+    bladeActive = false;
+
+    if(
+        currentLevel === 1
+    ){
+
+        state =
+            TRANSITION;
+
+        setTimeout(()=>{
+
+            startLevelCountdown(2);
+
+        },500);
+
+    }
+    else{
+
+        endGame();
+    }
+}
+
+
+/* =========================================================
+   END GAME
+========================================================= */
+
+function endGame(){
+
+    state =
+        GAMEOVER;
+
+    clearInterval(
+        gameTimer
+    );
+
+    clearInterval(
+        level1SpawnTimer
+    );
+
+    clearTimeout(
+        level2SpawnTimeout
+    );
+
+    finalScore.textContent =
+        String(score)
+        .padStart(3,"0");
+
+    gameover.style.display =
+        "flex";
+
+    stageValue.textContent =
+        "DONE";
+
+    timeValue.textContent =
+        "00";
+}
+
+
+/* =========================================================
+   HUD
+========================================================= */
+
+function updateHUD(){
+
+    scoreValue.textContent =
+        String(score)
+        .padStart(3,"0");
+
+    comboValue.textContent =
+        "x" + combo;
+}
+
+
+/* =========================================================
+   RESET
+========================================================= */
+
+function resetGame(){
+
+    clearInterval(
+        gameTimer
+    );
+
+    clearInterval(
+        level1SpawnTimer
+    );
+
+    clearInterval(
+        countdownTimer
+    );
+
+    clearTimeout(
+        level2SpawnTimeout
+    );
+
+    score = 0;
+
+    combo = 0;
+
+    currentLevel = 0;
+
+    timeLeft = 0;
+
+    objects = [];
+
+    ball = null;
+
+    particles = [];
+
+    bodyFeedbacks = [];
+
+    bladeActive = false;
+
+    bladeCooldown = 0;
+
+    bombPenaltyCooldown = 0;
+
+    catchCooldown = 0;
+
+    catchGrip.active = false;
+    catchGrip.strength = 0;
+
+    lastBallType = null;
+
+    updateHUD();
+
+    gameover.style.display =
+        "none";
+
+    startScreen.style.display =
+        "none";
+
+    startCalibration();
+}
+
+
+/* =========================================================
+   MEDIAPIPE POSE
+========================================================= */
+
+const pose =
+    new Pose({
+
+        locateFile:
+            file =>
+                `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    });
+
+pose.setOptions({
+
+    modelComplexity:1,
+
+    smoothLandmarks:true,
+
+    enableSegmentation:false,
+
+    smoothSegmentation:false,
+
+    minDetectionConfidence:.45,
+
+    minTrackingConfidence:.45
+});
+
+pose.onResults(
+    results => {
+
+        if(
+            results &&
+            results.poseLandmarks
+        ){
+
+            poseLandmarks =
+                results.poseLandmarks;
+
+        }
+        else{
+
+            poseLandmarks =
+                null;
+        }
+    }
+);
+
+
+/* =========================================================
+   CAMERA
+========================================================= */
+
+async function startCamera(){
+
+    if(cameraStarted)
+        return;
+
+    cameraStarted = true;
+
+    const camera =
+        new Camera(
+            video,
+            {
+
+                onFrame:
+                    async()=>{
+
+                        if(video.readyState >= 2 && !video.paused){
+                            try{
+
+                                await pose.send({
+                                    image:video
+                                });
+
+                            }
+                            catch(error){
+
+                                console.error(
+                                    "Pose error:",
+                                    error
+                                );
+                            }
+                        }
+                    },
+
+                width:1280,
+                height:720
+            }
+        );
+
+    camera.start();
+}
+
+
+/* =========================================================
+   START BUTTON
+========================================================= */
+
+document
+    .getElementById("startBtn")
+    .addEventListener(
+        "click",
+        ()=>{
+
+            initAudio();
+
+            startCamera();
+
+            startCalibration();
+
+        }
+    );
+
+
+/* =========================================================
+   RESTART
+========================================================= */
+
+document
+    .getElementById("restartBtn")
+    .addEventListener(
+        "click",
+        ()=>{
+
+            initAudio();
+
+            resetGame();
+
+        }
+    );
+
+
+/* =========================================================
+   MAIN UPDATE
+========================================================= */
+
+function update(){
+
+    if(
+        state === CALIBRATION
+    ){
+
+        updateCalibrationUI();
+    }
+
+    if(
+        state === LEVEL1
+    ){
+
+        updateLevel1();
+    }
+
+    if(
+        state === LEVEL2
+    ){
+
+        updateLevel2();
+    }
+
+    updateParticles();
+
+    updateBodyFeedbacks();
+
+    updateFlash();
+}
+
+
+/* =========================================================
+   DRAW
+========================================================= */
+
+function draw(){
+
+    ctx.clearRect(
+        0,
+        0,
+        W,
+        H
+    );
+
+    if(
+        poseLandmarks &&
+        state !== START &&
+        state !== GAMEOVER
+    ){
+
+        drawSkeleton(
+            poseLandmarks
+        );
+    }
+
+    if(
+        state === LEVEL1
+    ){
+
+        for(
+            const o of objects
+        ){
+
+            if(
+                o.type === "fruit"
+            ){
+
+                drawFruit(o);
+
+            }
+            else{
+
+                drawBomb(o);
+            }
+        }
+
+        drawEnergyBlade();
+    }
+
+    if(
+        state === LEVEL2
+    ){
+
+        drawBall();
+        drawCatchGrip();
+    }
+
+    drawParticles();
+
+    drawBodyFeedbacks();
+
+    drawFlash();
+}
+
+
+/* =========================================================
+   GAME LOOP
+========================================================= */
+
+function loop(){
+
+    requestAnimationFrame(
+        loop
+    );
+
+    try {
+        update();
+        draw();
+    } catch(err) {
+        console.error("Game loop non-fatal error caught:", err);
+    }
+}
+
+loop();
+
+
+/* =========================================================
+   VISIBILITY
+========================================================= */
+
+document.addEventListener(
+    "visibilitychange",
+    ()=>{
+
+        if(
+            document.hidden
+        ){
+
+            clearInterval(
+                gameTimer
+            );
+        }
+
+    }
+);
+
+
+/* =========================================================
+   INITIAL HUD & CAMERA
+========================================================= */
+
+updateHUD();
+
+stageValue.textContent =
+    "READY";
+
+timeValue.textContent =
+    "--";
+
+startCamera();
+
+</script>
+
+</body>
+</html>
